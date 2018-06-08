@@ -1,23 +1,53 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommandLine;
+using CommandLine.Text;
 
 namespace duplicatus
 {
     class Program
     {
-        static async Task<int> Main(string[] args)
+        class Options
         {
-            if (args.Length < 2)
-            {
-                Console.WriteLine("Requires two args.  [PathToCheck] [FileToSave]");
-                return -1;
-            }
-            var pathToCheck = args[0];
+            // Omitting long name, defaults to name of property, ie "--verbose"
+            [Option(Default = false, HelpText = "Prints all messages to standard output.")]
+            public bool Verbose { get; set; }
+        }
 
-            Console.WriteLine($"Checking path: '{args[0]}' and saving catalog to '{args[1]}'.");
+        [Verb("catalog", HelpText = "Enumerate all files in path and create a catalog.json file")]
+        class CatalogOptions
+        {
+             [Value(0, MetaName = "Search path",  Required = true, HelpText = "Path to catalog.")]
+            public string InputPath { get; set; }
+
+            [Value(1, MetaName = "Catalog filename",  Required = true, HelpText = "Filename to save.")]
+            public string CatalogFilename { get; set;}
+        }
+
+        static int Main(string[] args)
+        {
+            return CommandLine.Parser.Default.ParseArguments<Options, CatalogOptions>(args)
+            .MapResult<Options, CatalogOptions, int>(
+                (Options opts) => RunOptionsAndReturnExitCode(opts),
+                (CatalogOptions opts) => RunOptionsAndReturnExitCode(opts),
+                errs  => HandleParseError(errs)
+            );
+        }
+
+        private static int RunOptionsAndReturnExitCode(Options opts)
+        {
+            return 0;
+        }
+
+        private static int RunOptionsAndReturnExitCode(CatalogOptions opts)
+        {
+            var pathToCheck = opts.InputPath;
+
+            Console.WriteLine($"Checking path: '{opts.InputPath}' and saving catalog to '{opts.CatalogFilename}'.");
             Console.WriteLine("\nStarting catalog...");
             var sw = new System.Diagnostics.Stopwatch();
             sw.Start();
@@ -40,11 +70,11 @@ namespace duplicatus
                 System.Threading.Interlocked.Increment(ref filesProcessed);
                 lastFile = info.AbsolutePath;
             };
-            var co = new CatalogOperation(args[0], trackProgress);
+            var co = new CatalogOperation(opts.InputPath, trackProgress);
             var files = co.Run().ToList();
             running = false;
             var timeToIndex = sw.ElapsedMilliseconds;
-            await progressTask;
+            progressTask.GetAwaiter().GetResult();
             Console.WriteLine("Time to index: {0} files.  {1}ms", files.Count, timeToIndex);
             var duplicates = files.GroupBy(zz => zz.MD5Hash).Where(zz => zz.Count() > 1).ToList();
             Console.WriteLine($"{duplicates.Count()} sets of duplicates.");
@@ -54,8 +84,13 @@ namespace duplicatus
                 Console.WriteLine($"{md5String} - {f.Count()} matching files.");
                 Console.WriteLine("\t{0}", string.Join("\r\n\t", f.Select(zz => zz.AbsolutePath)));
             }
-            FileInformation.SerializeToDisk(args[1], files);
+            FileInformation.SerializeToDisk(opts.CatalogFilename, files);
             return 0;
+        }
+
+        private static int HandleParseError(IEnumerable<Error> errs)
+        {
+            return -1;
         }
     }
 }
