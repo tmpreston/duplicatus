@@ -30,12 +30,19 @@ namespace duplicatus
 
         static int Main(string[] args)
         {
-            return CommandLine.Parser.Default.ParseArguments<Options, CatalogOptions>(args)
+            var retValue = CommandLine.Parser.Default.ParseArguments<Options, CatalogOptions>(args)
             .MapResult<Options, CatalogOptions, int>(
                 (Options opts) => RunOptionsAndReturnExitCode(opts),
                 (CatalogOptions opts) => RunOptionsAndReturnExitCode(opts),
                 errs  => HandleParseError(errs)
             );
+            if (System.Diagnostics.Debugger.IsAttached)
+            {
+                Console.WriteLine($"Result: {retValue}");
+                Console.ReadLine();
+            }
+
+            return retValue;
         }
 
         private static int RunOptionsAndReturnExitCode(Options opts)
